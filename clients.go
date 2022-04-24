@@ -130,30 +130,51 @@ type httpClient struct {
 	bodProd bodyStreamProducer
 }
 
+// TODO: Why not create seperately:
+// - newHTTPClient
+// - newHTTP2Client
+// - newHTTP3Client
+// Wouldn't that simplify it?
+// Take a look at this - only transport is modified: https://posener.github.io/http2/
+//
 func newHTTPClient(opts *clientOpts) client {
 	c := new(httpClient)
-	tr := &http.Transport{
-		TLSClientConfig:     opts.tlsConfig,
-		MaxIdleConnsPerHost: int(opts.maxConns),
-		DisableKeepAlives:   opts.disableKeepAlives,
-	}
-	tr.DialContext = httpDialContextFunc(opts.bytesRead, opts.bytesWritten)
-	if opts.HTTP2 {
-		_ = http2.ConfigureTransport(tr)
-	} else {
-		tr.TLSNextProto = make(
-			map[string]func(authority string, c *tls.Conn) http.RoundTripper,
-		)
+
+	// TODO:
+	// Create a variable that will satisfy transport interface
+    var tr http.RoundTripper
+	switch HTTPVERSION {
+	case 1:
+		tr = &http.Transport{
+			TLSClientConfig:     opts.tlsConfig,
+			MaxIdleConnsPerHost: int(opts.maxConns),
+			DisableKeepAlives:   opts.disableKeepAlives,
+            TLSNextProto: make(map[string]func(authority string, c *tls.Conn) http.RoundTripper),
+	        DialContext = httpDialContextFunc(opts.bytesRead, opts.bytesWritten)
+		}
+	case 2:
+		tr = &http2.Transport{
+			TLSClientConfig:     opts.tlsConfig,
+			MaxIdleConnsPerHost: int(opts.maxConns),
+			DisableKeepAlives:   opts.disableKeepAlives,
+	        DialContext = httpDialContextFunc(opts.bytesRead, opts.bytesWritten)
+		}
+	case 3:
+		tr = &http3.Transport{
+			TLSClientConfig:     opts.tlsConfig,
+			MaxIdleConnsPerHost: int(opts.maxConns),
+			DisableKeepAlives:   opts.disableKeepAlives,
+	        DialContext = httpDialContextFunc(opts.bytesRead, opts.bytesWritten)
+		}
 	}
 
-	cl := &http.Client{
+	c.client = &http.Client{
 		Transport: tr,
 		Timeout:   opts.timeout,
 		CheckRedirect: func(req *http.Request, via []*http.Request) error {
 			return http.ErrUseLastResponse
 		},
 	}
-	c.client = cl
 
 	c.headers = headersToHTTPHeaders(opts.headers)
 	c.method, c.body, c.bodProd = opts.method, opts.body, opts.bodProd

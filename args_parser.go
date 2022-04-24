@@ -151,6 +151,13 @@ func newKingpinParser() argsParser {
 		}).
 		Bool()
 
+	app.Flag("http3", "Use net/http client with quic-go transport enabled (HTTP/3)").
+		Action(func(*kingpin.ParseContext) error {
+			kparser.clientType = nhttp2
+			return nil
+		}).
+		Bool()
+
 	app.Flag(
 		"print", "Specifies what to output. Comma-separated list of values"+
 			" 'intro' (short: 'i'), 'progress' (short: 'p'),"+
