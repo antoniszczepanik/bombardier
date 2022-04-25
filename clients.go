@@ -11,6 +11,7 @@ import (
 
 	"github.com/valyala/fasthttp"
 	"golang.org/x/net/http2"
+	"github.com/lucas-clemente/quic-go/http3"
 )
 
 type client interface {
@@ -20,8 +21,7 @@ type client interface {
 type bodyStreamProducer func() (io.ReadCloser, error)
 
 type clientOpts struct {
-	HTTP2 bool
-
+	clientType        clientTyp
 	maxConns          uint64
 	timeout           time.Duration
 	tlsConfig         *tls.Config
@@ -130,44 +130,41 @@ type httpClient struct {
 	bodProd bodyStreamProducer
 }
 
-// TODO: Why not create seperately:
-// - newHTTPClient
-// - newHTTP2Client
-// - newHTTP3Client
-// Wouldn't that simplify it?
-// Take a look at this - only transport is modified: https://posener.github.io/http2/
-//
 func newHTTPClient(opts *clientOpts) client {
-	c := new(httpClient)
-
-	// TODO:
-	// Create a variable that will satisfy transport interface
-    var tr http.RoundTripper
-	switch HTTPVERSION {
-	case 1:
-		tr = &http.Transport{
-			TLSClientConfig:     opts.tlsConfig,
-			MaxIdleConnsPerHost: int(opts.maxConns),
-			DisableKeepAlives:   opts.disableKeepAlives,
-            TLSNextProto: make(map[string]func(authority string, c *tls.Conn) http.RoundTripper),
-	        DialContext = httpDialContextFunc(opts.bytesRead, opts.bytesWritten)
-		}
-	case 2:
-		tr = &http2.Transport{
-			TLSClientConfig:     opts.tlsConfig,
-			MaxIdleConnsPerHost: int(opts.maxConns),
-			DisableKeepAlives:   opts.disableKeepAlives,
-	        DialContext = httpDialContextFunc(opts.bytesRead, opts.bytesWritten)
-		}
-	case 3:
-		tr = &http3.Transport{
-			TLSClientConfig:     opts.tlsConfig,
-			MaxIdleConnsPerHost: int(opts.maxConns),
-			DisableKeepAlives:   opts.disableKeepAlives,
-	        DialContext = httpDialContextFunc(opts.bytesRead, opts.bytesWritten)
-		}
+	tr := &http.Transport{
+		TLSClientConfig:     opts.tlsConfig,
+		MaxIdleConnsPerHost: int(opts.maxConns),
+		DisableKeepAlives:   opts.disableKeepAlives,
+		TLSNextProto: make(map[string]func(authority string, c *tls.Conn) http.RoundTripper),
+		DialContext: httpDialContextFunc(opts.bytesRead, opts.bytesWritten),
 	}
+	return client(newHTTPClientWithTransport(opts, tr))
+}
 
+func newHTTP2Client(opts *clientOpts) client {
+	tr := &http.Transport{
+		TLSClientConfig:     opts.tlsConfig,
+		MaxIdleConnsPerHost: int(opts.maxConns),
+		DisableKeepAlives:   opts.disableKeepAlives,
+		DialContext: httpDialContextFunc(opts.bytesRead, opts.bytesWritten),
+	}
+	_ = http2.ConfigureTransport(tr)
+	// if err != nil {
+
+	// }
+	return client(newHTTPClientWithTransport(opts, tr))
+}
+
+func newHTTP3Client(opts *clientOpts) client {
+	tr := &http3.RoundTripper{
+		TLSClientConfig:     opts.tlsConfig,
+	}
+	return client(newHTTPClientWithTransport(opts, tr))
+}
+
+
+func newHTTPClientWithTransport(opts *clientOpts, tr http.RoundTripper) client {
+	c := new(httpClient)
 	c.client = &http.Client{
 		Transport: tr,
 		Timeout:   opts.timeout,
@@ -175,7 +172,6 @@ func newHTTPClient(opts *clientOpts) client {
 			return http.ErrUseLastResponse
 		},
 	}
-
 	c.headers = headersToHTTPHeaders(opts.headers)
 	c.method, c.body, c.bodProd = opts.method, opts.body, opts.bodProd
 	var err error

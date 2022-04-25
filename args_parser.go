@@ -151,9 +151,9 @@ func newKingpinParser() argsParser {
 		}).
 		Bool()
 
-	app.Flag("http3", "Use net/http client with quic-go transport enabled (HTTP/3)").
+	app.Flag("http3", "Use net/http client with quic-go HTTP/3 transport").
 		Action(func(*kingpin.ParseContext) error {
-			kparser.clientType = nhttp2
+			kparser.clientType = qhttp3
 			return nil
 		}).
 		Bool()

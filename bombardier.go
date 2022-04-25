@@ -127,7 +127,7 @@ func newBombardier(c config) (*bombardier, error) {
 	}
 
 	cc := &clientOpts{
-		HTTP2:             false,
+		clientType:        c.clientType,
 		maxConns:          c.numConns,
 		timeout:           c.timeout,
 		tlsConfig:         tlsConfig,
@@ -141,7 +141,7 @@ func newBombardier(c config) (*bombardier, error) {
 		bytesRead:    &b.bytesRead,
 		bytesWritten: &b.bytesWritten,
 	}
-	b.client = makeHTTPClient(c.clientType, cc)
+	b.client = makeHTTPClient(cc)
 
 	if !b.conf.printProgress {
 		b.bar.Output = ioutil.Discard
@@ -159,17 +159,15 @@ func newBombardier(c config) (*bombardier, error) {
 	return b, nil
 }
 
-func makeHTTPClient(clientType clientTyp, cc *clientOpts) client {
+func makeHTTPClient(cc *clientOpts) client {
 	var cl client
-	switch clientType {
+	switch cc.clientType {
 	case nhttp1:
 		cl = newHTTPClient(cc)
 	case nhttp2:
-		cc.HTTP2 = true
-		cl = newHTTPClient(cc)
-	case nhttp3:
-		cc.HTTP3 = true
-		cl = newHTTPClient(cc)
+		cl = newHTTP2Client(cc)
+	case qhttp3:
+		cl = newHTTP3Client(cc)
 	case fhttp:
 		fallthrough
 	default:

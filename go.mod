@@ -11,9 +11,10 @@ require (
 	github.com/codesenberg/concurrent v0.0.0-20180531114123-64560cfcf964
 	github.com/juju/ratelimit v1.0.1
 	github.com/klauspost/compress v1.11.8 // indirect
+	github.com/lucas-clemente/quic-go v0.27.0 // indirect
 	github.com/satori/go.uuid v1.2.0
 	github.com/stretchr/testify v1.7.0 // indirect
 	github.com/valyala/fasthttp v1.21.0
-	golang.org/x/net v0.0.0-20201016165138-7b1cca2348c0
+	golang.org/x/net v0.0.0-20210428140749-89ef3d95e781
 	gopkg.in/check.v1 v1.0.0-20201130134442-10cb98267c6c // indirect
 )

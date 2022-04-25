@@ -164,6 +164,7 @@ const (
 	fhttp clientTyp = iota
 	nhttp1
 	nhttp2
+	qhttp3
 )
 
 func (ct clientTyp) String() string {
@@ -174,6 +175,8 @@ func (ct clientTyp) String() string {
 		return "net/http v1.x"
 	case nhttp2:
 		return "net/http v2.0"
+	case qhttp3:
+		return "quic/go http/3"
 	}
 	return "unknown client"
 }

@@ -407,6 +407,27 @@ func TestArgsParsing(t *testing.T) {
 			[][]string{
 				{
 					programName,
+					"--http3",
+					"https://somehost.somedomain",
+				},
+			},
+			config{
+				numConns:      defaultNumberOfConns,
+				timeout:       defaultTimeout,
+				headers:       new(headersList),
+				method:        "GET",
+				url:           "https://somehost.somedomain:443",
+				clientType:    qhttp3,
+				printIntro:    true,
+				printProgress: true,
+				printResult:   true,
+				format:        knownFormat("plain-text"),
+			},
+		},
+		{
+			[][]string{
+				{
+					programName,
 					"--body-file=testbody.txt",
 					"https://somehost.somedomain",
 				},
