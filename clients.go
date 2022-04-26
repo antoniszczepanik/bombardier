@@ -9,9 +9,9 @@ import (
 	"strings"
 	"time"
 
+	"github.com/lucas-clemente/quic-go/http3"
 	"github.com/valyala/fasthttp"
 	"golang.org/x/net/http2"
-	"github.com/lucas-clemente/quic-go/http3"
 )
 
 type client interface {
@@ -135,10 +135,10 @@ func newHTTPClient(opts *clientOpts) client {
 		TLSClientConfig:     opts.tlsConfig,
 		MaxIdleConnsPerHost: int(opts.maxConns),
 		DisableKeepAlives:   opts.disableKeepAlives,
-		TLSNextProto: make(map[string]func(authority string, c *tls.Conn) http.RoundTripper),
-		DialContext: httpDialContextFunc(opts.bytesRead, opts.bytesWritten),
+		TLSNextProto:        make(map[string]func(authority string, c *tls.Conn) http.RoundTripper),
+		DialContext:         httpDialContextFunc(opts.bytesRead, opts.bytesWritten),
 	}
-	return client(newHTTPClientWithTransport(opts, tr))
+	return newHTTPClientWithTransport(opts, tr)
 }
 
 func newHTTP2Client(opts *clientOpts) client {
@@ -146,22 +146,19 @@ func newHTTP2Client(opts *clientOpts) client {
 		TLSClientConfig:     opts.tlsConfig,
 		MaxIdleConnsPerHost: int(opts.maxConns),
 		DisableKeepAlives:   opts.disableKeepAlives,
-		DialContext: httpDialContextFunc(opts.bytesRead, opts.bytesWritten),
+		DialContext:         httpDialContextFunc(opts.bytesRead, opts.bytesWritten),
 	}
 	_ = http2.ConfigureTransport(tr)
-	// if err != nil {
-
-	// }
-	return client(newHTTPClientWithTransport(opts, tr))
+	return newHTTPClientWithTransport(opts, tr)
 }
 
 func newHTTP3Client(opts *clientOpts) client {
 	tr := &http3.RoundTripper{
-		TLSClientConfig:     opts.tlsConfig,
+		TLSClientConfig: opts.tlsConfig,
+		Dial:            http3DialFunc(opts.bytesRead, opts.bytesWritten),
 	}
-	return client(newHTTPClientWithTransport(opts, tr))
+	return newHTTPClientWithTransport(opts, tr)
 }
-
 
 func newHTTPClientWithTransport(opts *clientOpts, tr http.RoundTripper) client {
 	c := new(httpClient)

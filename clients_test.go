@@ -8,6 +8,8 @@ import (
 	"sync/atomic"
 	"testing"
 	"time"
+
+	"github.com/lucas-clemente/quic-go/http3"
 )
 
 func TestShouldReturnNilIfNoHeadersWhereSet(t *testing.T) {
@@ -64,7 +66,7 @@ func TestHTTP2Client(t *testing.T) {
 		Addr: url,
 		Handler: http.HandlerFunc(
 			func(w http.ResponseWriter, r *http.Request) {
-				if !r.ProtoAtLeast(2, 0) {
+				if r.ProtoMajor != 2 {
 					t.Errorf("invalid HTTP proto version: %v", r.Proto)
 				}
 
@@ -144,8 +146,6 @@ func TestHTTP1Clients(t *testing.T) {
 
 	bytesRead, bytesWritten := int64(0), int64(0)
 	cc := &clientOpts{
-		clientType: nhttp2,
-
 		headers: new(headersList),
 		url:     s.URL,
 		method:  "GET",
@@ -157,6 +157,8 @@ func TestHTTP1Clients(t *testing.T) {
 	}
 	clients := []client{
 		newHTTPClient(cc),
+		// TODO: How does that pass? Shouldn't that be http1?
+		newHTTP2Client(cc),
 		newFastHTTPClient(cc),
 	}
 	for _, c := range clients {
@@ -179,70 +181,72 @@ func TestHTTP1Clients(t *testing.T) {
 }
 
 func TestHTTP3Client(t *testing.T) {
-	t.Error("TODO: Add test for http3 client")
-	// responseSize := 1024
-	// response := bytes.Repeat([]byte{'a'}, responseSize)
-	// url := "localhost:8443"
-	// s := &http.Server{
-	// 	Addr: url,
-	// 	Handler: http.HandlerFunc(
-	// 		func(w http.ResponseWriter, r *http.Request) {
-	// 			if !r.ProtoAtLeast(2, 0) {
-	// 				t.Errorf("invalid HTTP proto version: %v", r.Proto)
-	// 			}
+	// Setup a server with handler that will:
+	// - assert correct protocol used
+	// - write some response back and 200
+	// - will indeed be configured to use http3
+	responseSize := 1024
+	response := bytes.Repeat([]byte{'a'}, responseSize)
+	url := "localhost:8443"
+	errChan := make(chan error)
+	s := http3.Server{
+		Server: &http.Server{
+			Addr: url,
+			Handler: http.HandlerFunc(
+				func(w http.ResponseWriter, r *http.Request) {
+					if r.ProtoMajor != 3 {
+						t.Errorf("invalid HTTP proto version: %v", r.Proto)
+					}
+					w.WriteHeader(http.StatusOK)
+					_, err := w.Write(response)
+					if err != nil {
+						t.Error(err)
+					}
+				},
+			),
+		},
+	}
+	go func() {
+		err := s.ListenAndServeTLS("testserver.cert", "testserver.key")
+		errChan <- err
+	}()
 
-	// 			w.WriteHeader(http.StatusOK)
-	// 			_, err := w.Write(response)
-	// 			if err != nil {
-	// 				t.Error(err)
-	// 			}
-	// 		},
-	// 	),
-	// 	TLSConfig: &tls.Config{
-	// 		NextProtos: []string{"http/2.0"},
-	// 	},
-	// }
-	// errChan := make(chan error)
-	// go func() {
-	// 	err := s.ListenAndServeTLS("testserver.cert", "testserver.key")
-	// 	errChan <- err
-	// }()
+	// TODO(codesenberg): this should be fixed later
+	time.Sleep(100 * time.Millisecond)
+	bytesRead, bytesWritten := int64(0), int64(0)
 
-	// // TODO(codesenberg): this should be fixed later
-	// time.Sleep(100 * time.Millisecond)
-	// bytesRead, bytesWritten := int64(0), int64(0)
-	// c := newHTTP2Client(&clientOpts{
-	// 	headers: new(headersList),
-	// 	url:     "https://" + url,
-	// 	method:  "GET",
-	// 	tlsConfig: &tls.Config{
-	// 		InsecureSkipVerify: true,
-	// 	},
+	c := newHTTP3Client(&clientOpts{
+		headers: new(headersList),
+		url:     "https://" + url,
+		method:  "GET",
+		tlsConfig: &tls.Config{
+			InsecureSkipVerify: true,
+		},
 
-	// 	body: new(string),
+		body: new(string),
 
-	// 	bytesRead:    &bytesRead,
-	// 	bytesWritten: &bytesWritten,
-	// })
-	// code, _, err := c.do()
-	// if err != nil {
-	// 	t.Error(err)
-	// 	return
-	// }
-	// if code != http.StatusOK {
-	// 	t.Errorf("invalid response code: %v", code)
-	// }
-	// if atomic.LoadInt64(&bytesRead) == 0 {
-	// 	t.Errorf("invalid response size: %v", bytesRead)
-	// }
-	// if atomic.LoadInt64(&bytesWritten) == 0 {
-	// 	t.Errorf("empty request of size: %v", bytesWritten)
-	// }
-	// err = s.Close()
-	// if err != nil {
-	// 	t.Error(err)
-	// }
-	// if err := <-errChan; err != http.ErrServerClosed {
-	// 	t.Error(err)
-	// }
+		bytesRead:    &bytesRead,
+		bytesWritten: &bytesWritten,
+	})
+	code, _, err := c.do()
+	if err != nil {
+		t.Error(err)
+		return
+	}
+	if code != http.StatusOK {
+		t.Errorf("invalid response code: %v", code)
+	}
+	if atomic.LoadInt64(&bytesRead) == 0 {
+		t.Errorf("invalid response size: %v", bytesRead)
+	}
+	if atomic.LoadInt64(&bytesWritten) == 0 {
+		t.Errorf("empty request of size: %v", bytesWritten)
+	}
+	err = s.Close()
+	if err != nil {
+		t.Error(err)
+	}
+	if err := <-errChan; err != http.ErrServerClosed {
+		t.Error(err)
+	}
 }
