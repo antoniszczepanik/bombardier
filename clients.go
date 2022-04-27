@@ -155,7 +155,8 @@ func newHTTP2Client(opts *clientOpts) client {
 func newHTTP3Client(opts *clientOpts) client {
 	tr := &http3.RoundTripper{
 		TLSClientConfig: opts.tlsConfig,
-		Dial:            http3DialFunc(opts.bytesRead, opts.bytesWritten),
+		// TODO: Figure out how to instrument HTTP3 dial function to count bytes
+		// read and written at transport level.
 	}
 	return newHTTPClientWithTransport(opts, tr)
 }

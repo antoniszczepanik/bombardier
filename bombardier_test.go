@@ -501,7 +501,7 @@ func testBombardierRateLimiting(clientType clientTyp, t *testing.T) {
 }
 
 func testAllClients(parent *testing.T, testFun func(clientTyp, *testing.T)) {
-	clients := []clientTyp{fhttp, nhttp1, nhttp2}
+	clients := []clientTyp{fhttp, nhttp1, nhttp2, qhttp3}
 	for _, ct := range clients {
 		parent.Run(ct.String(), func(t *testing.T) {
 			testFun(ct, t)
